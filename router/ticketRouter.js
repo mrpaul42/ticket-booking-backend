@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
 const ticketController = require("../controller/ticket");
-const authController = require("../controller/auth");
 
 router.post("/", ticketController.createTicket);
 router.get("/:ticketId", ticketController.getTicketInfoById);

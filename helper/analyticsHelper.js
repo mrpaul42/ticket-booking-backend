@@ -1,73 +1,20 @@
-const ticketSchema = require("../module/ticketSchema");
 const monthNames = require("../constant");
+const dotenv = require("dotenv");
+dotenv.config({ path: "./config.env" });
+const Pool = require("pg").Pool;
+const pool = new Pool({
+  user: process.env.USER_NAME,
+  host: process.env.HOST,
+  database: process.env.DATABASE,
+  password: process.env.PASSWORD,
+  port: process.env.PORT,
+});
 
 const getProfitAnalyticsByAggregation = async (startDate, endDate) => {
   try {
-    const data = await ticketSchema.aggregate([
-      {
-        $match: {
-          createdAt: {
-            $gte: startDate,
-            $lte: endDate,
-          },
-        },
-      },
-      {
-        $addFields: {
-          monthNumber: { $month: "$createdAt" },
-        },
-      },
-      {
-        $addFields: {
-          monthName: {
-            $switch: {
-              branches: [
-                { case: { $eq: ["$monthNumber", 1] }, then: "January" },
-                { case: { $eq: ["$monthNumber", 2] }, then: "February" },
-                { case: { $eq: ["$monthNumber", 3] }, then: "March" },
-                { case: { $eq: ["$monthNumber", 4] }, then: "April" },
-                { case: { $eq: ["$monthNumber", 5] }, then: "May" },
-                { case: { $eq: ["$monthNumber", 6] }, then: "June" },
-                { case: { $eq: ["$monthNumber", 7] }, then: "July" },
-                { case: { $eq: ["$monthNumber", 8] }, then: "August" },
-                { case: { $eq: ["$monthNumber", 9] }, then: "September" },
-                { case: { $eq: ["$monthNumber", 10] }, then: "October" },
-                { case: { $eq: ["$monthNumber", 11] }, then: "November" },
-                { case: { $eq: ["$monthNumber", 12] }, then: "December" },
-              ],
-              default: "",
-            },
-          },
-        },
-      },
-      {
-        $group: {
-          _id: "$monthName",
-          summaryProfit: { $sum: "$ticket_price" },
-          createdAt: { $push: "$createdAt" },
-        },
-      },
-      {
-        $project: {
-          month: "$_id",
-          summaryProfit: 1,
-          createAt: { $arrayElemAt: ["$createdAt", 0] },
-          _id: 0,
-        },
-      },
-      {
-        $sort: {
-          createAt: 1,
-        },
-      },
-      {
-        $project: {
-          createAt: 0,
-        },
-      },
-    ]);
-
-    return data;
+    const fetchProfitQuery = `SELECT to_char(date_trunc('month', created_at), 'Month') as month, SUM(ticket_price) as "summaryProfit" FROM tickets WHERE created_at >= $1 AND created_at <= $2 GROUP BY month ORDER BY month ASC`;
+    const { rows } = await pool.query(fetchProfitQuery, [startDate, endDate]);
+    return rows;
   } catch (err) {
     console.log("catch exception --->", err);
     return res.status(400).json({ status: "failure", message: err.message });
@@ -76,25 +23,20 @@ const getProfitAnalyticsByAggregation = async (startDate, endDate) => {
 
 const getProfitAnalyticsByJavascriptLogic = async (startDate, endDate) => {
   try {
-    const data = await ticketSchema.aggregate([
-      {
-        $match: {
-          createdAt: {
-            $gte: startDate,
-            $lte: endDate,
-          },
-        },
-      },
-      {
-        $sort: { createdAt: 1 },
-      },
-    ]);
-    const d = new Date(data[0].createdAt);
+    const fetchProfitQuery =
+      "SELECT * FROM tickets WHERE created_at >= $1 AND created_at <= $2 ORDER BY created_at ASC";
+    const { rows } = await pool.query(fetchProfitQuery, [startDate, endDate]);
+    if (!(rows && rows.length > 0))
+      return {
+        status: "success",
+        message: "Data not found within the date range.",
+      };
+    const d = new Date(rows[0].created_at);
     let month = monthNames[d.getMonth()];
     let result = [],
       summaryProfit = 0;
-    data.forEach((ele) => {
-      const d = new Date(ele.createdAt);
+    rows.forEach((ele) => {
+      const d = new Date(ele.created_at);
       if (monthNames[d.getMonth()] === month) {
         summaryProfit += ele.ticket_price;
       } else {
@@ -104,6 +46,7 @@ const getProfitAnalyticsByJavascriptLogic = async (startDate, endDate) => {
       }
     });
     result.push({ month, summaryProfit });
+    console.log(result, "array");
     return result;
   } catch (err) {
     console.log("catch exception --->", err);
@@ -113,98 +56,32 @@ const getProfitAnalyticsByJavascriptLogic = async (startDate, endDate) => {
 
 const getVisitAnalyticsByAggregation = async (startDate, endDate) => {
   try {
-    const data = await ticketSchema.aggregate([
-      {
-        $match: {
-          createdAt: {
-            $gte: startDate,
-            $lte: endDate,
-          },
-        },
-      },
-      {
-        $addFields: {
-          monthNumber: { $month: "$createdAt" },
-        },
-      },
-      {
-        $addFields: {
-          monthName: {
-            $switch: {
-              branches: [
-                { case: { $eq: ["$monthNumber", 1] }, then: "January" },
-                { case: { $eq: ["$monthNumber", 2] }, then: "February" },
-                { case: { $eq: ["$monthNumber", 3] }, then: "March" },
-                { case: { $eq: ["$monthNumber", 4] }, then: "April" },
-                { case: { $eq: ["$monthNumber", 5] }, then: "May" },
-                { case: { $eq: ["$monthNumber", 6] }, then: "June" },
-                { case: { $eq: ["$monthNumber", 7] }, then: "July" },
-                { case: { $eq: ["$monthNumber", 8] }, then: "August" },
-                { case: { $eq: ["$monthNumber", 9] }, then: "September" },
-                { case: { $eq: ["$monthNumber", 10] }, then: "October" },
-                { case: { $eq: ["$monthNumber", 11] }, then: "November" },
-                { case: { $eq: ["$monthNumber", 12] }, then: "December" },
-              ],
-              default: "",
-            },
-          },
-        },
-      },
-      {
-        $group: {
-          _id: "$monthName",
-          count: { $sum: 1 },
-          createdAt: { $push: "$createdAt" },
-        },
-      },
-      {
-        $project: {
-          month: "$_id",
-          summaryVisits: "$count",
-          createAt: { $arrayElemAt: ["$createdAt", 0] },
-          _id: 0,
-        },
-      },
-      {
-        $sort: {
-          createAt: 1,
-        },
-      },
-      {
-        $project: {
-          createAt: 0,
-        },
-      },
-    ]);
-
-    return data;
+    const fetchProfitQuery = `SELECT to_char(date_trunc('month', created_at), 'Month') as month, COUNT(*) as "summaryVisits" FROM tickets WHERE created_at >= $1 AND created_at <= $2 GROUP BY month ORDER BY month ASC`;
+    const { rows } = await pool.query(fetchProfitQuery, [startDate, endDate]);
+    return rows;
   } catch (err) {
     console.log("catch exception --->", err);
-    throw new Error({ status: "failure" });
+    throw new Error(err);
   }
 };
 
 const getVisitAnalyticsByJavascriptLogic = async (startDate, endDate) => {
   try {
-    const data = await ticketSchema.aggregate([
-      {
-        $match: {
-          createdAt: {
-            $gte: startDate,
-            $lte: endDate,
-          },
-        },
-      },
-      {
-        $sort: { createdAt: 1 },
-      },
-    ]);
-    const d = new Date(data[0].createdAt);
+    const fetchProfitQuery =
+      "SELECT * FROM tickets WHERE created_at >= $1 AND created_at <= $2 ORDER BY created_at ASC";
+    const { rows } = await pool.query(fetchProfitQuery, [startDate, endDate]);
+    console.log(rows);
+    if (!(rows && rows.length > 0))
+      return {
+        status: "success",
+        message: "Data not found within the date range.",
+      };
+    const d = new Date(rows[0].created_at);
     let month = monthNames[d.getMonth()];
     let result = [],
       summaryVisits = 0;
-    data.forEach((ele) => {
-      const d = new Date(ele.createdAt);
+    rows.forEach((ele) => {
+      const d = new Date(ele.created_at);
       if (monthNames[d.getMonth()] === month) {
         summaryVisits += 1;
       } else {
@@ -214,6 +91,7 @@ const getVisitAnalyticsByJavascriptLogic = async (startDate, endDate) => {
       }
     });
     result.push({ month, summaryVisits });
+    console.log(result, "array");
     return result;
   } catch (err) {
     console.log("catch exception --->", err);
